@@ -3,16 +3,18 @@ import networkx as nx
 from config import project_name,db_host,db_port,db_name,followerID_collection_name,id_name_collection_name,tweet_collection_name,project_target_name
 #from config import project_target_name
 from pymongo import MongoClient
-
+import codecs
+import bson
 import os
 
 PROJECT_DIRECTORY = 'output/project/' + project_name
 
 if not os.path.exists(PROJECT_DIRECTORY):
-        os.makedirs(PROJECT_DIRECTORY)
+    os.makedirs(PROJECT_DIRECTORY)
 
 
-NETWORK_FILE_NAME = PROJECT_DIRECTORY + '/mention_network_ristrict.gexf'
+PER_ORG_FILE = PROJECT_DIRECTORY + '/per_org_manually_classification_new.csv'
+NETWORK_FILE_NAME = PROJECT_DIRECTORY + '/mention_network_ristrict_per.gexf'
 
 # connect to localhost mongodb
 client = MongoClient(db_host, db_port)
@@ -33,6 +35,26 @@ for doc in cursor:
    target_followers.append(doc["followerID"])
 
 target_followers = list(set(target_followers))
+print(type(target_followers[0]))
+
+# read the person or organisation classification result
+# and the targe followers are those classified as 'per'
+per_org = {}
+
+target_followers = []
+
+per_org_file = codecs.open(PER_ORG_FILE,'r','utf-8')
+
+for line in per_org_file:
+    lines = line.split()
+    per_org[lines[1]] = lines[2]
+    if lines[2] == 'per':
+        target_followers.append(bson.int64.Int64(lines[1]))
+
+
+print(lines[1])
+print(lines[2])
+print(type(target_followers[0]))
 
 # retrive the id name mapping
 result = db[id_name_collection_name].find({"id":{"$in":target_followers}},{"_id":0})
@@ -109,4 +131,5 @@ for document in cursor:
             
 
 
-nx.readwrite.gexf.write_gexf(GRAPH, NETWORK_FILE_NAME, encoding='utf-8',version='1.2draft')
+nx.readwrite.gexf.write_gexf(GRAPH, NETWORK_FILE_NAME, encoding='utf-8',
+                             version='1.2draft')

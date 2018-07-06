@@ -1,9 +1,10 @@
+import json
 #import ijson
 import networkx as nx
-from config import project_name,db_host,db_port,db_name,followerID_collection_name,id_name_collection_name,tweet_collection_name,project_target_name
-#from config import project_target_name
+from config import id_or_screen_name,project_name,db_host,db_port,db_name,followerID_collection_name,id_name_collection_name,tweet_collection_name,tweet_num
+from config import project_target_name
 from pymongo import MongoClient
-
+import codecs
 import os
 
 PROJECT_DIRECTORY = 'output/project/' + project_name
@@ -11,8 +12,13 @@ PROJECT_DIRECTORY = 'output/project/' + project_name
 if not os.path.exists(PROJECT_DIRECTORY):
         os.makedirs(PROJECT_DIRECTORY)
 
+#NETWORK_FILE_NAME = PROJECT_DIRECTORY + '/mention_filtered_intranetwork_retweet_and_others_v2.gexf'
+NETWORK_FILE_NAME = PROJECT_DIRECTORY + '/mention_network_per.gexf'
 
-NETWORK_FILE_NAME = PROJECT_DIRECTORY + '/mention_network_ristrict.gexf'
+TWEETS_COUNT = PROJECT_DIRECTORY + '/followers_tweets_count.json'
+MENTIONNAME_COUNT = PROJECT_DIRECTORY + '/followers_mentionname_count.json'
+
+PER_ORG_FILE = PROJECT_DIRECTORY + '/per_org_manually_classification_new.csv'
 
 # connect to localhost mongodb
 client = MongoClient(db_host, db_port)
@@ -23,9 +29,6 @@ db = client[db_name]
 # extract the tweets from target user's follower
 project_target_name = project_target_name.split(' ')
 
-for i in project_target_name:
-    print(i)
-
 # find target user's follower IDs
 target_followers = []
 cursor = db[followerID_collection_name].find({"user":{"$in":project_target_name}})
@@ -34,15 +37,49 @@ for doc in cursor:
 
 target_followers = list(set(target_followers))
 
+# read the person or organisation classification result
+per_org = {}
+
+target_followers = []
+
+per_org_file = codecs.open(PER_ORG_FILE,'r','utf-8')
+
+for line in per_org_file:
+    lines = line.split()
+    per_org[lines[1]] = lines[2]
+    if lines[2] == 'PER':
+        target_followers.append(lines[2])
+
+per_org_file.close()
+
+
+
 # retrive the id name mapping
 result = db[id_name_collection_name].find({"id":{"$in":target_followers}},{"_id":0})
 
 ID_NAME = {}
 for doc in result:
-    if doc['screen_name'] not in project_target_name:
-        ID_NAME[doc['id']] = doc['screen_name']
+    ID_NAME[doc['id']] = doc
+
+
+
 
 GRAPH = nx.DiGraph()
+
+##
+## funtions
+##
+
+def is_person(per_org, ID):
+    
+    if str(ID) not in per_org:
+        return False
+    
+    if per_org[str(ID)] == 'per':
+        return True
+    else:
+        return False
+
 
 def add_connection(user_from, user_to):
     if not GRAPH.has_edge(user_from, user_to):
@@ -70,11 +107,19 @@ for document in cursor:
     KEY = document["user"]["id"]
 
     tweeter_name = document["user"]["screen_name"]
-    
-    if tweeter_name in project_target_name:
+
+    if tweeter_name == 'tampere_3':
+        print("id: %d" % (KEY))    
+
+    if tweeter_name is None:
         print('Skipping', KEY)
         continue
     
+    if not is_in_follower_list(KEY):
+        continue    
+
+    if not is_person(per_org, KEY):
+        continue
 
     # the list to save his/her mentioned names
     mentioned_name = []
@@ -104,9 +149,10 @@ for document in cursor:
         #print(name['name'])
         #print(name['id'])
         #print(tweeter_name)
-        if name['name'].casefold() != tweeter_name.casefold() and is_in_follower_list(name['id']):
+        if name['name'].casefold() != tweeter_name.casefold() and is_in_follower_list(name['id']) and is_person(per_org,name['id']):
             add_connection(tweeter_name.lower(), name['name'].lower())
             
 
 
-nx.readwrite.gexf.write_gexf(GRAPH, NETWORK_FILE_NAME, encoding='utf-8',version='1.2draft')
+nx.readwrite.gexf.write_gexf(GRAPH, NETWORK_FILE_NAME, encoding='utf-8',
+                             version='1.2draft')
