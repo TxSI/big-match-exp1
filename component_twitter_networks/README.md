@@ -19,6 +19,8 @@ conda: 4.3.21
 langdetect: 1.0.7  
 
 # HOW TO
+### System Configuration
+Before you run the system, please check the config.py to make sure database setting are correct and also set the twitter data collecting and cleaning related field
 ### Collect Data
 Install and run MongoDB in background
 https://docs.mongodb.com/manual/tutorial/install-mongodb-on-os-x/
@@ -59,5 +61,3 @@ Example code is given in make_LDA_rec.py. You can modify the example to run LDA 
 python make_LDA_rec.py
 ```
 
-# System Configuration
-Before you run the system, please check the config.py to make sure database setting are correct and also set the twitter data collecting and cleaning related field
